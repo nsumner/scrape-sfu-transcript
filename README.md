@@ -11,8 +11,8 @@ suitable for post hoc or exploratory data analysis via other means.
 
 Right now, there is not a coordinated installation process.
 Instead, you can use it by cloning the repo and building from source.
-The tools is written in [Rust](https://www.rust-lang.org/), so you must first
-[install Rust](https://rustup.rs/).
+The tool is written in [Rust](https://www.rust-lang.org/), so you must first
+[install Rust](https://rustup.rs/). To clone this repo and build, use:
 
 ```bash
 git clone git@github.com:nsumner/scrape-sfu-transcript.git
@@ -89,7 +89,8 @@ using `cargo run`:
 cargo run --release -- --dir <path to directory of transcripts> --newid <first anonymized student id>
 ```
 
-The `--dir` option specifies a directory of PDF transcripts. All PDFs in that
-directory will be process (in random order) and given anonymized student IDs in
-the range [`newid`, `newid` + #transcripts). If any PDF in that directory is
-not an SFU SIMS transcript, the program will simply crash rather than proceed.
+The `--dir` option specifies a directory containing PDF transcripts. All PDFs in
+that directory will be process (in random order) and given anonymized student
+IDs in the range [`newid`, `newid` + #transcripts). If any PDF in that directory
+is not an SFU SIMS transcript, the program will simply crash rather than
+proceed.
