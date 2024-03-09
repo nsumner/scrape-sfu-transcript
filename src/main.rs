@@ -1,14 +1,16 @@
-#![warn(clippy::all,clippy::pedantic,)]
+#![warn(clippy::all, clippy::pedantic)]
 
 use std::collections::BTreeMap;
 use std::io::{Error, ErrorKind};
 
-use clap::Parser;
+use clap::{Args, Parser};
 use lopdf::content::{Content, Operation};
 use lopdf::Document;
 use lopdf::Error as LopdfError;
 use lopdf::Object;
 use lopdf::Result as LopdfResult;
+use rand::prelude::SliceRandom;
+use rand::thread_rng;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 enum Chunk {
@@ -208,16 +210,12 @@ fn is_qualifier(s: &str) -> bool {
 }
 
 fn is_perm_dt(s: &str) -> bool {
-    s == "Perm.Dt:" || s.split("-").count() == 3
+    s == "Perm.Dt:" || s.split('-').count() == 3
 }
 
 const POSSIBLE_GRADES: [&str; 28] = [
     // Standard passing grades
-    "A+", "A", "A-",
-    "B+", "B", "B-",
-    "C+", "C", "C-",
-    "D",
-    "P",
+    "A+", "A", "A-", "B+", "B", "B-", "C+", "C", "C-", "D", "P",
     // Temporary grades
     "DE", "GN", "IP",
     // Forms of failing
@@ -404,9 +402,11 @@ fn process_chunks(chunks: &[Chunk]) -> Result<StudentInfo, Error> {
     })
 }
 
-fn write_long_csv<W: std::io::Write>(writer: &mut csv::Writer<W>,
-                                     student: &StudentInfo,
-                                     new_id: usize) -> Result<(), Error> {
+fn write_long_csv<W: std::io::Write>(
+    writer: &mut csv::Writer<W>,
+    student: &StudentInfo,
+    new_id: usize,
+) -> Result<(), Error> {
     for transfer in &student.transfers {
         writer.write_record([
             &new_id.to_string(),
@@ -416,9 +416,7 @@ fn write_long_csv<W: std::io::Write>(writer: &mut csv::Writer<W>,
             &transfer.course.subject,
             &transfer.course.id,
             &transfer.course.grade,
-            transfer.school.as_ref()
-                           .map(String::as_str)
-                           .unwrap_or("None"),
+            transfer.school.as_deref().unwrap_or("None"),
         ])?;
     }
     for semester in &student.semesters {
@@ -441,33 +439,67 @@ fn write_long_csv<W: std::io::Write>(writer: &mut csv::Writer<W>,
 
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None)]
-struct Args {
+struct Cli {
+    #[command(flatten)]
+    input: InputSource,
+
+    /// Anonymized (first) student ID to use during export
+    #[arg(short, long)]
+    newid: usize,
+}
+
+#[derive(Args, Debug)]
+#[group(required = true, multiple = false)]
+struct InputSource {
     /// Path to input file
     #[arg(short, long)]
-    input: std::path::PathBuf,
+    pdf: Option<std::path::PathBuf>,
 
-    /// Anonymized student ID to use during export
+    /// Path to input file
     #[arg(short, long)]
-    newid: usize,    
+    dir: Option<std::path::PathBuf>,
 }
 
 fn main() -> Result<(), Error> {
-    let args = Args::parse();
+    let args = Cli::parse();
 
-    match Document::load(args.input) {
-        Ok(document) => {
-            let chunks = extract_page_chunks(&document).unwrap();
-            let simplified: Vec<Vec<Chunk>> = chunks
-                .into_iter()
-                .map(|page| page.into_iter().map(Chunk::simplify).collect())
-                .collect();
-            let combined = combine_page_chunks(simplified).unwrap();
-            let student = process_chunks(&combined).unwrap();
+    let mut sources = match (args.input.pdf, args.input.dir) {
+        (Some(path), None) => vec![path],
+        (None, Some(path)) => std::fs::read_dir(path)?
+            // Only process files that are readable
+            .filter_map(std::result::Result::ok)
+            .filter(|entry| entry.file_type().map_or(false, |f| f.is_file()))
+            .map(|entry| entry.path())
+            // Restrict to PDFs
+            .filter(|path| {
+                path.extension()
+                    .filter(|ext| ext.to_ascii_lowercase() == "pdf")
+                    .is_some()
+            })
+            .collect(),
+        _ => unreachable!(),
+    };
 
-            let mut writer = csv::Writer::from_writer(std::io::stdout());
-            write_long_csv(&mut writer, &student, args.newid)?;
+    let mut rng = thread_rng();
+    sources.shuffle(&mut rng);
+
+    for (count, source) in sources.iter().enumerate() {
+        match Document::load(source) {
+            Ok(document) => {
+                let chunks = extract_page_chunks(&document).unwrap();
+                let simplified: Vec<Vec<Chunk>> = chunks
+                    .into_iter()
+                    .map(|page| page.into_iter().map(Chunk::simplify).collect())
+                    .collect();
+                let combined = combine_page_chunks(simplified).unwrap();
+                let student = process_chunks(&combined).unwrap();
+
+                let mut writer = csv::Writer::from_writer(std::io::stdout());
+                write_long_csv(&mut writer, &student, count + args.newid)?;
+            }
+            Err(err) => eprintln!("Error: {err}"),
         }
-        Err(err) => eprintln!("Error: {err}"),
     }
+
     Ok(())
 }

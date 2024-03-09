@@ -21,24 +21,24 @@ cargo build --release
 ```
 
 
-### Running
+### Extracting from one PDF
 
 From within the same build directory, you can run the tool using `cargo run`:
 
 ```bash
-cargo run --release -- --input <path to SIMS PDF transcript> --newid <anonymized student id>
+cargo run --release -- --pdf <path to SIMS PDF transcript> --newid <anonymized student id>
 ```
 
-where the anonymized id is a numerical identifier that is not protected and
-not associated with the student. You can choose the anonymized IDs for each
-student outside of the tool.
+where the `--pdf` option specifies a single pdf file to extract. The anonymized
+id is a numerical identifier that is not protected and not associated with the
+student. You could choose the anonymized IDs for each student outside of the tool.
 
 For example, if you have a SIMS transcript saved at the location
 `~/teaching/sfusr-some-student-transcript.PDF` and want to give
 that student the anonymized ID 42, you would run:
 
 ```bash
-cargo run --release -- --input ~/teaching/sfusr-some-student-transcript.PDF --newid 42
+cargo run --release -- --pdf ~/teaching/sfusr-some-student-transcript.PDF --newid 42
 ```
 
 Which will produce a "long" CSV including both transfer and SFU course
@@ -78,3 +78,18 @@ Student ID, Program, Year, Term, Subject, Course ID, Grade, Transfer Institution
 
 where `Year` and `Term` only apply to SFU courses and `Transfer Institution`
 only applies to credits transferred in.
+
+### Extracting from a directory containing PDFs
+
+Similarly, you can specify a directory and extract information from all PDFs in
+that directory. From within the same build directory, you again run the tool
+using `cargo run`:
+
+```bash
+cargo run --release -- --dir <path to directory of transcripts> --newid <first anonymized student id>
+```
+
+The `--dir` option specifies a directory of PDF transcripts. All PDFs in that
+directory will be process (in random order) and given anonymized student IDs in
+the range [`newid`, `newid` + #transcripts). If any PDF in that directory is
+not an SFU SIMS transcript, the program will simply crash rather than proceed.
